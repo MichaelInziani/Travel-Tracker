@@ -6,8 +6,8 @@ const app = express();
 const port = 3000;
 
 const db = new pg.Client({
-  user:"postgres",
-  host:"localhost",
+  user: "postgres",
+  host: "localhost",
   database: "world",
   password: "HyperText1205Lang!&",
   port: 5432,
@@ -18,40 +18,56 @@ db.connect();
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
-async function checkVisited(){
+async function checkVisisted() {
   const result = await db.query("SELECT country_code FROM visited_countries");
-
   let countries = [];
-  result.rows.forEach((country)=>{
+  result.rows.forEach((country) => {
     countries.push(country.country_code);
   });
   return countries;
 }
-
-//GET home page
+// GET home page
 app.get("/", async (req, res) => {
-  const countries = await checkVisited();
-  //console.log(result.rows);
-  res.render("index.ejs", {countries:countries, total: countries.length});
+  const countries = await checkVisisted();
+  res.render("index.ejs", { countries: countries, total: countries.length });
 });
 
-//INSERT a new country
-app.post("/add", async(req, res)=>{
- const input = req.body["country"];
+//INSERT new country
+app.post("/add", async (req, res) => {
+  const input = req.body["country"];
 
- const result = await db.query("SELECT country_code FROM countries WHERE country_name=$1",
- [input]
- );
+  try {
+    const result = await db.query(
+      "SELECT country_code FROM countries WHERE LOWER(country_name) LIKE '%' || $1 || '%';",
+      [input.toLowerCase()]
+    );
 
- if(result.rows.length !== 0){
-  const data = result.rows[0];
-  const countryCode = data.country_code;
-
-  await db.query("INSERT INTO visited_countries (country_code) VALUES($1)", [
-    countryCode,
-  ]);
-  res.redirect("/");
- }
+    const data = result.rows[0];
+    const countryCode = data.country_code;
+    try {
+      await db.query(
+        "INSERT INTO visited_countries (country_code) VALUES ($1)",
+        [countryCode]
+      );
+      res.redirect("/");
+    } catch (err) {
+      console.log(err);
+      const countries = await checkVisisted();
+      res.render("index.ejs", {
+        countries: countries,
+        total: countries.length,
+        error: "Country has already been added, try again.",
+      });
+    }
+  } catch (err) {
+    console.log(err);
+    const countries = await checkVisisted();
+    res.render("index.ejs", {
+      countries: countries,
+      total: countries.length,
+      error: "Country name does not exist, try again.",
+    });
+  }
 });
 
 app.listen(port, () => {
